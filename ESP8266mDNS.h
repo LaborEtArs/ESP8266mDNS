@@ -340,8 +340,8 @@ public:
                                                const hMDNSServiceQuery p_hServiceQuery, // dynamic service query handle
                                                uint32_t p_u32AnswerIndex,               // index of the updated answer
                                                uint32_t p_u32ServiceQueryAnswerMask,    // flag for the updated answer item
-                                               bool p_bSetContent,
-                                               void* p_pUserdata);
+                                               bool p_bSetContent,                      // true: Answer component set, false: component deleted
+                                               void* p_pUserdata);                      // pUserdata set via 'installServiceQuery'
 
     // Install a dynamic service query. For every received answer (part) the given callback
     // function is called. The query will be updated every time, the TTL for an answer
@@ -371,14 +371,20 @@ public:
 #ifdef MDNS_IP4_SUPPORT
     bool hasAnswerIP4Address(const hMDNSServiceQuery p_hServiceQuery,
                              const uint32_t p_u32AnswerIndex);
+    uint32_t answerIP4AddressCount(const hMDNSServiceQuery p_hServiceQuery,
+                                   const uint32_t p_u32AnswerIndex);
     IPAddress answerIP4Address(const hMDNSServiceQuery p_hServiceQuery,
-                               const uint32_t p_u32AnswerIndex);
+                               const uint32_t p_u32AnswerIndex,
+                               const uint32_t p_u32AddressIndex);
 #endif
 #ifdef MDNS_IP6_SUPPORT
     bool hasAnswerIP6Address(const hMDNSServiceQuery p_hServiceQuery,
                              const uint32_t p_u32AnswerIndex);
+    uint32_t answerIP6AddressCount(const hMDNSServiceQuery p_hServiceQuery,
+                                   const uint32_t p_u32AnswerIndex);
     IPAddress answerIP6Address(const hMDNSServiceQuery p_hServiceQuery,
-                               const uint32_t p_u32AnswerIndex);
+                               const uint32_t p_u32AnswerIndex,
+                               const uint32_t p_u32AddressIndex);
 #endif
     bool hasAnswerPort(const hMDNSServiceQuery p_hServiceQuery,
                        const uint32_t p_u32AnswerIndex);
@@ -425,6 +431,11 @@ public:
     // Enable OTA update
     hMDNSService enableArduino(uint16_t p_u16Port,
                                bool p_bAuthUpload = false);
+    
+    // Domain name helper
+    static bool updateDomain(char*& p_rpcDomain,
+                             const char* p_pcDivider = "-",
+                             const char* p_pcDefaultDomain = 0);
     
 protected:
     /** STRUCTS **/
@@ -821,6 +832,30 @@ protected:
                 bool has80Percent(uint32_t p_u32Now) const;
                 bool isOutdated(uint32_t p_u32Now) const;
             } stcTTL;
+#ifdef MDNS_IP4_SUPPORT
+            /**
+             * stcIP4Address
+             */
+            typedef struct _stcIP4Address {
+                _stcIP4Address* m_pNext;
+                IPAddress       m_IPAddress;
+                stcTTL          m_TTL;
+                
+                _stcIP4Address(IPAddress p_IPAddress,
+                               uint32_t p_u32TTL = 0,
+                               uint32_t p_u32Millis = 0);
+            } stcIP4Address;
+#endif
+#ifdef MDNS_IP6_SUPPORT
+            /**
+             * stcIP6Address
+             */
+            typedef struct _stcIP6Address {
+                _stcIP6Address* m_pNext;
+                IP6Address      m_IPAddress;
+                stcTTL          m_TTL;
+            } stcIP6Address;
+#endif
 
             _stcAnswer*         m_pNext;
             // The service domain is the first 'answer' (from PTR answer, using service and protocol) to be set
@@ -832,17 +867,15 @@ protected:
             char*               m_pcHostDomain;
             uint16_t            m_u16Port;          // 2. level answer (SRV, using service domain), eg. 5000
             stcTTL              m_TTLHostDomainAndPort;
-#ifdef MDNS_IP4_SUPPORT
-            IPAddress           m_IP4Address;       // 3. level answer (A, using host domain), eg. 123.456.789.012
-            stcTTL              m_TTLIP4Address;
-#endif
-#ifdef MDNS_IP6_SUPPORT
-            IPAddress           m_IP6Address;       // 3. level answer (AAAA, using host domain), eg. 1234::09
-            stcTTL              m_TTLIP6Address;
-#endif
             stcMDNSServiceTxts  m_Txts;             // 2. level answer (TXT, using service domain), eg. c#=1
             char*               m_pcTxts;
             stcTTL              m_TTLTxts;
+#ifdef MDNS_IP4_SUPPORT
+            stcIP4Address*      m_pIP4Addresses;    // 3. level answer (A, using host domain), eg. 123.456.789.012
+#endif
+#ifdef MDNS_IP6_SUPPORT
+            stcIP6Address*      m_pIP6Addresses;    // 3. level answer (AAAA, using host domain), eg. 1234::09
+#endif
             uint32_t            m_u32ContentFlags;
 
             _stcAnswer(void);
@@ -858,6 +891,27 @@ protected:
             
             char* allocTxts(size_t p_stLength);
             bool releaseTxts(void);
+            
+#ifdef MDNS_IP4_SUPPORT
+            bool releaseIP4Addresses(void);
+            bool addIP4Address(_stcIP4Address* p_pIP4Address);
+            bool removeIP4Address(_stcIP4Address* p_pIP4Address);
+            const stcIP4Address* findIP4Address(const IPAddress& p_IPAddress) const;
+            stcIP4Address* findIP4Address(const IPAddress& p_IPAddress);
+            uint32_t IP4AddressCount(void) const;
+            const stcIP4Address* IP4AddressAtIndex(uint32_t p_u32Index) const;
+            stcIP4Address* IP4AddressAtIndex(uint32_t p_u32Index);
+#endif
+#ifdef MDNS_IP6_SUPPORT
+            bool releaseIP6Addresses(void);
+            bool addIP6Address(_stcIP6Address* p_pIP6Address);
+            bool removeIP6Address(_stcIP6Address* p_pIP6Address);
+            const stcIP6Address* findIP6Address(const IPAddress& p_IPAddress) const;
+            stcIP6Address* findIP6Address(const IPAddress& p_IPAddress);
+            uint32_t IP6AddressCount(void) const;
+            const stcIP6Address* IP6AddressAtIndex(uint32_t p_u32Index) const;
+            stcIP6Address* IP6AddressAtIndex(uint32_t p_u32Index);
+#endif
         } stcAnswer;
 
         _stcMDNSServiceQuery*       m_pNext;
@@ -954,18 +1008,15 @@ protected:
     bool _parseResponse(const stcMDNS_MsgHeader& p_Header);
     bool _processAnswers(const stcMDNS_RRAnswer* p_pPTRAnswers);
     bool _processPTRAnswer(const stcMDNS_RRAnswerPTR* p_pPTRAnswer,
-                           bool& p_rbFoundNewQueryAnswer);
+                           bool& p_rbFoundNewKeyAnswer);
     bool _processSRVAnswer(const stcMDNS_RRAnswerSRV* p_pSRVAnswer,
-                           bool& p_rbFoundNewQueryAnswer);
-    bool _processTXTAnswer(const stcMDNS_RRAnswerTXT* p_pTXTAnswer,
-                           bool& p_rbFoundNewQueryAnswer);
+                           bool& p_rbFoundNewKeyAnswer);
+    bool _processTXTAnswer(const stcMDNS_RRAnswerTXT* p_pTXTAnswer);
 #ifdef MDNS_IP4_SUPPORT
-    bool _processAAnswer(const stcMDNS_RRAnswerA* p_pAAnswer,
-                         bool& p_rbFoundNewQueryAnswer);
+    bool _processAAnswer(const stcMDNS_RRAnswerA* p_pAAnswer);
 #endif
 #ifdef MDNS_IP6_SUPPORT
-    bool _processAAAAAnswer(const stcMDNS_RRAnswerAAAA* p_pAAAAAnswer,
-                            bool& p_rbFoundNewQueryAnswer);
+    bool _processAAAAAnswer(const stcMDNS_RRAnswerAAAA* p_pAAAAAnswer);
 #endif
     
     /* PROBING */

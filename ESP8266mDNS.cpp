@@ -670,9 +670,10 @@ const char* MDNSResponder::answerHostname(const uint32_t p_u32AnswerIndex) {
      */
     IPAddress MDNSResponder::answerIP(const uint32_t p_u32AnswerIndex) {
 
-        const stcMDNSServiceQuery*              pServiceQuery = _findLegacyServiceQuery();
-        const stcMDNSServiceQuery::stcAnswer*   pSQAnswer = (pServiceQuery ? pServiceQuery->answerAtIndex(p_u32AnswerIndex) : 0);
-        return (pSQAnswer ? pSQAnswer->m_IP4Address : IPAddress());
+        const stcMDNSServiceQuery*                              pServiceQuery = _findLegacyServiceQuery();
+        const stcMDNSServiceQuery::stcAnswer*                   pSQAnswer = (pServiceQuery ? pServiceQuery->answerAtIndex(p_u32AnswerIndex) : 0);
+        const stcMDNSServiceQuery::stcAnswer::stcIP4Address*    pIP4Address = (pSQAnswer ? pSQAnswer->IP4AddressAtIndex(0) : 0);
+        return (pIP4Address ? pIP4Address->m_IPAddress : IPAddress());
     }
 #endif
 
@@ -682,9 +683,10 @@ const char* MDNSResponder::answerHostname(const uint32_t p_u32AnswerIndex) {
      */
     IPAddress MDNSResponder::answerIP6(const uint32_t p_u32AnswerIndex) {
 
-        const stcMDNSServiceQuery*              pServiceQuery = _findLegacyServiceQuery();
-        const stcMDNSServiceQuery::stcAnswer*   pAnswer = (pServiceQuery ? pServiceQuery->answerAtIndex(p_u32AnswerIndex) : 0);
-        return (pAnswer ? pAnswer->m_IP6Address : IPAddress());
+        const stcMDNSServiceQuery*                              pServiceQuery = _findLegacyServiceQuery();
+        const stcMDNSServiceQuery::stcAnswer*                   pSQAnswer = (pServiceQuery ? pServiceQuery->answerAtIndex(p_u32AnswerIndex) : 0);
+        const stcMDNSServiceQuery::stcAnswer::stcIP6Address*    pIP6Address = (pSQAnswer ? pSQAnswer->IP6AddressAtIndex(0) : 0);
+        return (pIP6Address ? pIP6Address->m_IPAddress : IP6Address());
     }
 #endif
 
@@ -868,16 +870,29 @@ const char* MDNSResponder::answerHostDomain(const MDNSResponder::hMDNSServiceQue
         return ((pSQAnswer) &&
                 (pSQAnswer->m_u32ContentFlags & ServiceQueryAnswerType_IP4Address));
     }
+    
+    /*
+     * MDNSResponder::answerIP4AddressCount
+     */
+    uint32_t MDNSResponder::answerIP4AddressCount(const MDNSResponder::hMDNSServiceQuery p_hServiceQuery,
+                                                  const uint32_t p_u32AnswerIndex) {
+        
+        stcMDNSServiceQuery*            pServiceQuery = _findServiceQuery(p_hServiceQuery);
+        stcMDNSServiceQuery::stcAnswer* pSQAnswer = (pServiceQuery ? pServiceQuery->answerAtIndex(p_u32AnswerIndex) : 0);
+        return (pSQAnswer ? pSQAnswer->IP4AddressCount() : 0);
+    }
 
     /*
      * MDNSResponder::answerIP4Address
      */
     IPAddress MDNSResponder::answerIP4Address(const MDNSResponder::hMDNSServiceQuery p_hServiceQuery,
-                                              const uint32_t p_u32AnswerIndex) {
+                                              const uint32_t p_u32AnswerIndex,
+                                              const uint32_t p_u32AddressIndex) {
 
-        stcMDNSServiceQuery*            pServiceQuery = _findServiceQuery(p_hServiceQuery);
-        stcMDNSServiceQuery::stcAnswer* pSQAnswer = (pServiceQuery ? pServiceQuery->answerAtIndex(p_u32AnswerIndex) : 0);
-        return (pSQAnswer ? pSQAnswer->m_IP4Address : IPAddress());
+        stcMDNSServiceQuery*                            pServiceQuery = _findServiceQuery(p_hServiceQuery);
+        stcMDNSServiceQuery::stcAnswer*                 pSQAnswer = (pServiceQuery ? pServiceQuery->answerAtIndex(p_u32AnswerIndex) : 0);
+        stcMDNSServiceQuery::stcAnswer::stcIP4Address*  pIP4Address = (pSQAnswer ? pSQAnswer->IP4AddressAtIndex(p_u32AddressIndex) : 0);
+        return (pIP4Address ? pIP4Address->m_IPAddress : IPAddress());
     }
 #endif
 
@@ -893,17 +908,30 @@ const char* MDNSResponder::answerHostDomain(const MDNSResponder::hMDNSServiceQue
         return ((pSQAnswer) &&
                 (pSQAnswer->m_u32ContentFlags & ServiceQueryAnswerType_HostIP6Address));
     }
+    
+    /*
+     * MDNSResponder::answerIP6AddressCount
+     */
+    uint32_t MDNSResponder::answerIP6AddressCount(const MDNSResponder::hMDNSServiceQuery p_hServiceQuery,
+                                                  const uint32_t p_u32AnswerIndex) {
+        
+        stcMDNSServiceQuery*            pServiceQuery = _findServiceQuery(p_hServiceQuery);
+        stcMDNSServiceQuery::stcAnswer* pSQAnswer = (pServiceQuery ? pServiceQuery->answerAtIndex(p_u32AnswerIndex) : 0);
+        return (pSQAnswer ? pSQAnswer->IP6AddressCount() : 0);
+    }
 
     /*
      * MDNSResponder::answerIP6Address
      */
     IPAddress MDNSResponder::answerIP6Address(const MDNSResponder::hMDNSServiceQuery p_hServiceQuery,
-                                              const uint32_t p_u32AnswerIndex) {
+                                              const uint32_t p_u32AnswerIndex,
+                                              const uint32_t p_u32AddressIndex) {
 
-    stcMDNSServiceQuery*            pServiceQuery = _findServiceQuery(p_hServiceQuery);
-    stcMDNSServiceQuery::stcAnswer* pSQAnswer = (pServiceQuery ? pServiceQuery->answerAtIndex(p_u32AnswerIndex) : 0);
-    return (pSQAnswer ? pSQAnswer->m_IP6Address : IPAddress());
-}
+        stcMDNSServiceQuery*                            pServiceQuery = _findServiceQuery(p_hServiceQuery);
+        stcMDNSServiceQuery::stcAnswer*                 pSQAnswer = (pServiceQuery ? pServiceQuery->answerAtIndex(p_u32AnswerIndex) : 0);
+        stcMDNSServiceQuery::stcAnswer::stcIP6Address*  pIP6Address = (pSQAnswer ? pSQAnswer->IP6AddressAtIndex(p_u32AddressIndex) : 0);
+        return (pIP6Address ? pIP6Address->m_IPAddress : IPAddress());
+    }
 #endif
 
 /*

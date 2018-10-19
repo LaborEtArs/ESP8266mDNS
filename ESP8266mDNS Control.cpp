@@ -643,14 +643,14 @@ bool MDNSResponder::_processAnswers(const MDNSResponder::stcMDNS_RRAnswer* p_pAn
     bool    bResult = false;
     
     if (p_pAnswers) {
-        DEBUG_EX_INFO(DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseResponse: Processing answers...\n")););
+        DEBUG_EX_INFO(DEBUG_OUTPUT.printf(F("[MDNSResponder] _processAnswers: Processing answers...\n")););
         bResult = true;
         
         // Answers may arrive in an unexpected order. So we loop our answers as long, as we
         // can connect new information to service queries
-        bool    bFoundNewQueryAnswer;
+        bool    bFoundNewKeyAnswer;
         do {
-            bFoundNewQueryAnswer = false;
+            bFoundNewKeyAnswer = false;
             
             const stcMDNS_RRAnswer* pRRAnswer = p_pAnswers;
             while ((pRRAnswer) &&
@@ -658,32 +658,32 @@ bool MDNSResponder::_processAnswers(const MDNSResponder::stcMDNS_RRAnswer* p_pAn
                 // 1. level answer (PTR)
                 if (AnswerType_PTR == pRRAnswer->answerType()) {
                     // eg. _http._tcp.local PTR xxxx xx MyESP._http._tcp.local
-                    bResult = _processPTRAnswer((stcMDNS_RRAnswerPTR*)pRRAnswer, bFoundNewQueryAnswer);
+                    bResult = _processPTRAnswer((stcMDNS_RRAnswerPTR*)pRRAnswer, bFoundNewKeyAnswer);   // May 'enable' new SRV or TXT answers to be linked to queries
                 }
                 // 2. level answers
                 // SRV -> host domain and port
                 else if (AnswerType_SRV == pRRAnswer->answerType()) {
                     // eg. MyESP_http._tcp.local SRV xxxx xx yy zz 5000 esp8266.local
-                    bResult = _processSRVAnswer((stcMDNS_RRAnswerSRV*)pRRAnswer, bFoundNewQueryAnswer);
+                    bResult = _processSRVAnswer((stcMDNS_RRAnswerSRV*)pRRAnswer, bFoundNewKeyAnswer);   // May 'enable' new A/AAAA answers to be linked to queries
                 }
                 // TXT -> Txts
                 else if (AnswerType_TXT == pRRAnswer->answerType()) {
                     // eg. MyESP_http._tcp.local TXT xxxx xx c#=1
-                    bResult = _processTXTAnswer((stcMDNS_RRAnswerTXT*)pRRAnswer, bFoundNewQueryAnswer);
+                    bResult = _processTXTAnswer((stcMDNS_RRAnswerTXT*)pRRAnswer);
                 }
                 // 3. level answers
 #ifdef MDNS_IP4_SUPPORT
                 // A -> IP4Address
                 else if (AnswerType_A == pRRAnswer->answerType()) {
                     // eg. esp8266.local A xxxx xx 192.168.2.120
-                    bResult = _processAAnswer((stcMDNS_RRAnswerA*)pRRAnswer, bFoundNewQueryAnswer);
+                    bResult = _processAAnswer((stcMDNS_RRAnswerA*)pRRAnswer);
                 }
 #endif
 #ifdef MDNS_IP6_SUPPORT
                 // AAAA -> IP6Address
                 else if (AnswerType_AAAA == pRRAnswer->answerType()) {
                     // eg. esp8266.local AAAA xxxx xx 09cf::0c
-                    bResult = _processAAAAAnswer((stcMDNS_RRAnswerAAAA*)pRRAnswer, bFoundNewQueryAnswer);
+                    bResult = _processAAAAAnswer((stcMDNS_RRAnswerAAAA*)pRRAnswer);
                 }
 #endif
 
@@ -697,7 +697,7 @@ bool MDNSResponder::_processAnswers(const MDNSResponder::stcMDNS_RRAnswer* p_pAn
                     if ((_buildDomainForHost(m_pcHostname, hostDomain)) &&
                         (pRRAnswer->m_Header.m_Domain == hostDomain)) {
 
-                        DEBUG_EX_INFO(DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseResponse: Probing CONFLICT found with: %s.local\n"), m_pcHostname););
+                        DEBUG_EX_INFO(DEBUG_OUTPUT.printf(F("[MDNSResponder] _processAnswers: Probing CONFLICT found with: %s.local\n"), m_pcHostname););
                         _cancelProbingForHost();
                     }
                 }
@@ -711,7 +711,7 @@ bool MDNSResponder::_processAnswers(const MDNSResponder::stcMDNS_RRAnswer* p_pAn
                         if ((_buildDomainForService(*pService, true, serviceDomain)) &&
                             (pRRAnswer->m_Header.m_Domain == serviceDomain)) {
 
-                            DEBUG_EX_INFO(DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseResponse: Probing CONFLICT found with: %s.%s.%s\n"), (pService->m_pcName ?: m_pcHostname), pService->m_pcService, pService->m_pcProtocol););
+                            DEBUG_EX_INFO(DEBUG_OUTPUT.printf(F("[MDNSResponder] _processAnswers: Probing CONFLICT found with: %s.%s.%s\n"), (pService->m_pcName ?: m_pcHostname), pService->m_pcService, pService->m_pcProtocol););
                             _cancelProbingForService(*pService);
                         }
                     }
@@ -720,7 +720,7 @@ bool MDNSResponder::_processAnswers(const MDNSResponder::stcMDNS_RRAnswer* p_pAn
                 pRRAnswer = pRRAnswer->m_pNext; // Next collected answer
             }   // while (answers)
             esp_yield();
-        } while ((bFoundNewQueryAnswer) &&
+        } while ((bFoundNewKeyAnswer) &&
                  (bResult));
     }   // else: No answers provided
     DEBUG_EX_ERR(if (!bResult) { DEBUG_OUTPUT.printf(F("[MDNSResponder] _processAnswers: FAILED!\n")); });
@@ -731,7 +731,7 @@ bool MDNSResponder::_processAnswers(const MDNSResponder::stcMDNS_RRAnswer* p_pAn
  * MDNSResponder::_processPTRAnswer
  */
 bool MDNSResponder::_processPTRAnswer(const MDNSResponder::stcMDNS_RRAnswerPTR* p_pPTRAnswer,
-                                      bool& p_rbFoundNewQueryAnswer) {
+                                      bool& p_rbFoundNewKeyAnswer) {
     
     bool    bResult = false;
     
@@ -749,7 +749,7 @@ bool MDNSResponder::_processPTRAnswer(const MDNSResponder::stcMDNS_RRAnswerPTR* 
                     if (p_pPTRAnswer->m_u32TTL) {   // Received update message
                         pSQAnswer->m_TTLServiceDomain.set(p_pPTRAnswer->m_u32TTL, millis());    // Update TTL tag
                         DEBUG_EX_INFO(
-                                DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseResponse: Updated TTL for "));
+                                DEBUG_OUTPUT.printf(F("[MDNSResponder] p_pPTRAnswer: Updated TTL for "));
                                 _printRRDomain(pSQAnswer->m_ServiceDomain);
                                 DEBUG_OUTPUT.printf(F("\n"));
                         );
@@ -758,7 +758,7 @@ bool MDNSResponder::_processPTRAnswer(const MDNSResponder::stcMDNS_RRAnswerPTR* 
                         pSQAnswer->m_TTLServiceDomain.set(1, millis());             // See RFC 6762, 10.1
                         pSQAnswer->m_TTLServiceDomain.m_bUpdateScheduled = true;    // Avoid 'cache update' query
                         DEBUG_EX_INFO(
-                                DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseResponse: 'Goodbye' received for "));
+                                DEBUG_OUTPUT.printf(F("[MDNSResponder] p_pPTRAnswer: 'Goodbye' received for "));
                                 _printRRDomain(pSQAnswer->m_ServiceDomain);
                                 DEBUG_OUTPUT.printf(F("\n"));
                         );
@@ -773,7 +773,7 @@ bool MDNSResponder::_processPTRAnswer(const MDNSResponder::stcMDNS_RRAnswerPTR* 
                     
                     bResult = pServiceQuery->addAnswer(pSQAnswer);
                     
-                    p_rbFoundNewQueryAnswer = true;
+                    p_rbFoundNewKeyAnswer = true;
                     if (pServiceQuery->m_fnCallback) {
                         pServiceQuery->m_fnCallback(this, (hMDNSServiceQuery)pServiceQuery, pServiceQuery->indexOfAnswer(pSQAnswer), ServiceQueryAnswerType_ServiceDomain, true, pServiceQuery->m_pUserdata);
                     }
@@ -790,33 +790,34 @@ bool MDNSResponder::_processPTRAnswer(const MDNSResponder::stcMDNS_RRAnswerPTR* 
  * MDNSResponder::_processSRVAnswer
  */
 bool MDNSResponder::_processSRVAnswer(const MDNSResponder::stcMDNS_RRAnswerSRV* p_pSRVAnswer,
-                                      bool& p_rbFoundNewQueryAnswer) {
+                                      bool& p_rbFoundNewKeyAnswer) {
     
     bool    bResult = false;
     
     if ((bResult = (0 != p_pSRVAnswer))) {
-        // eg. MyESP_http._tcp.local SRV xxxx xx yy zz 5000 esp8266.local
+        // eg. MyESP._http._tcp.local SRV xxxx xx yy zz 5000 esp8266.local
         
         stcMDNSServiceQuery*    pServiceQuery = m_pServiceQueries;
         while (pServiceQuery) {
             stcMDNSServiceQuery::stcAnswer* pSQAnswer = pServiceQuery->findAnswerForServiceDomain(p_pSRVAnswer->m_Header.m_Domain);
             if (pSQAnswer) {    // Answer for this service domain (eg. MyESP._http._tcp.local) available
-                if (p_pSRVAnswer->m_u32TTL) {   // First or update message
+                if (p_pSRVAnswer->m_u32TTL) {   // First or update message (TTL != 0)
                     pSQAnswer->m_TTLHostDomainAndPort.set(p_pSRVAnswer->m_u32TTL, millis());    // Update TTL tag
                     DEBUG_EX_INFO(
-                            DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseResponse: Updated TTL for "));
+                            DEBUG_OUTPUT.printf(F("[MDNSResponder] _processSRVAnswer: Updated TTL for "));
                             _printRRDomain(pSQAnswer->m_ServiceDomain);
                             DEBUG_OUTPUT.printf(F(" host domain and port\n"));
                     );
                     // Host domain & Port
                     if ((pSQAnswer->m_HostDomain != p_pSRVAnswer->m_SRVDomain) ||
                         (pSQAnswer->m_u16Port != p_pSRVAnswer->m_u16Port)) {
+                        
                         pSQAnswer->m_HostDomain = p_pSRVAnswer->m_SRVDomain;
                         pSQAnswer->releaseHostDomain();
                         pSQAnswer->m_u16Port = p_pSRVAnswer->m_u16Port;
                         pSQAnswer->m_u32ContentFlags |= ServiceQueryAnswerType_HostDomainAndPort;
 
-                        p_rbFoundNewQueryAnswer = true;
+                        p_rbFoundNewKeyAnswer = true;
                         if (pServiceQuery->m_fnCallback) {
                             pServiceQuery->m_fnCallback(this, (hMDNSServiceQuery)pServiceQuery, pServiceQuery->indexOfAnswer(pSQAnswer), ServiceQueryAnswerType_HostDomainAndPort, true, pServiceQuery->m_pUserdata);
                         }
@@ -826,7 +827,7 @@ bool MDNSResponder::_processSRVAnswer(const MDNSResponder::stcMDNS_RRAnswerSRV* 
                     pSQAnswer->m_TTLHostDomainAndPort.set(1, millis());             // See RFC 6762, 10.1
                     pSQAnswer->m_TTLHostDomainAndPort.m_bUpdateScheduled = true;    // Avoid 'cache update' query
                     DEBUG_EX_INFO(
-                            DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseResponse: 'Goodbye' received for "));
+                            DEBUG_OUTPUT.printf(F("[MDNSResponder] _processSRVAnswer: 'Goodbye' received for "));
                             _printRRDomain(pSQAnswer->m_ServiceDomain);
                             DEBUG_OUTPUT.printf(F(" host domain and port\n"));
                     );
@@ -842,13 +843,12 @@ bool MDNSResponder::_processSRVAnswer(const MDNSResponder::stcMDNS_RRAnswerSRV* 
 /*
  * MDNSResponder::_processTXTAnswer
  */
-bool MDNSResponder::_processTXTAnswer(const MDNSResponder::stcMDNS_RRAnswerTXT* p_pTXTAnswer,
-                                      bool& p_rbFoundNewQueryAnswer) {
+bool MDNSResponder::_processTXTAnswer(const MDNSResponder::stcMDNS_RRAnswerTXT* p_pTXTAnswer) {
     
     bool    bResult = false;
     
     if ((bResult = (0 != p_pTXTAnswer))) {
-        // eg. MyESP_http._tcp.local TXT xxxx xx c#=1
+        // eg. MyESP._http._tcp.local TXT xxxx xx c#=1
         
         stcMDNSServiceQuery*    pServiceQuery = m_pServiceQueries;
         while (pServiceQuery) {
@@ -857,7 +857,7 @@ bool MDNSResponder::_processTXTAnswer(const MDNSResponder::stcMDNS_RRAnswerTXT* 
                 if (p_pTXTAnswer->m_u32TTL) {   // First or update message
                     pSQAnswer->m_TTLTxts.set(p_pTXTAnswer->m_u32TTL, millis()); // Update TTL tag
                     DEBUG_EX_INFO(
-                            DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseResponse: Updated TTL for "));
+                            DEBUG_OUTPUT.printf(F("[MDNSResponder] _processTXTAnswer: Updated TTL for "));
                             _printRRDomain(pSQAnswer->m_ServiceDomain);
                             DEBUG_OUTPUT.printf(F(" TXTs\n"));
                     );
@@ -866,7 +866,6 @@ bool MDNSResponder::_processTXTAnswer(const MDNSResponder::stcMDNS_RRAnswerTXT* 
                         pSQAnswer->m_u32ContentFlags |= ServiceQueryAnswerType_Txts;
                         pSQAnswer->releaseTxts();
                         
-                        p_rbFoundNewQueryAnswer = true;
                         if (pServiceQuery->m_fnCallback) {
                             pServiceQuery->m_fnCallback(this, (hMDNSServiceQuery)pServiceQuery, pServiceQuery->indexOfAnswer(pSQAnswer), ServiceQueryAnswerType_Txts, true, pServiceQuery->m_pUserdata);
                         }
@@ -876,7 +875,7 @@ bool MDNSResponder::_processTXTAnswer(const MDNSResponder::stcMDNS_RRAnswerTXT* 
                     pSQAnswer->m_TTLTxts.set(1, millis());          // See RFC 6762, 10.1
                     pSQAnswer->m_TTLTxts.m_bUpdateScheduled = true; // Avoid 'cache update' query
                     DEBUG_EX_INFO(
-                            DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseResponse: 'Goodbye' received for "));
+                            DEBUG_OUTPUT.printf(F("[MDNSResponder] _processTXTAnswer: 'Goodbye' received for "));
                             _printRRDomain(pSQAnswer->m_ServiceDomain);
                             DEBUG_OUTPUT.printf(F(" TXTs\n"));
                     );
@@ -893,8 +892,7 @@ bool MDNSResponder::_processTXTAnswer(const MDNSResponder::stcMDNS_RRAnswerTXT* 
     /*
      * MDNSResponder::_processAAnswer
      */
-    bool MDNSResponder::_processAAnswer(const MDNSResponder::stcMDNS_RRAnswerA* p_pAAnswer,
-                                        bool& p_rbFoundNewQueryAnswer) {
+    bool MDNSResponder::_processAAnswer(const MDNSResponder::stcMDNS_RRAnswerA* p_pAAnswer) {
         
         bool    bResult = false;
         
@@ -905,37 +903,50 @@ bool MDNSResponder::_processTXTAnswer(const MDNSResponder::stcMDNS_RRAnswerTXT* 
             while (pServiceQuery) {
                 stcMDNSServiceQuery::stcAnswer* pSQAnswer = pServiceQuery->findAnswerForHostDomain(p_pAAnswer->m_Header.m_Domain);
                 if (pSQAnswer) {    // Answer for this host domain (eg. esp8266.local) available
-                    if (p_pAAnswer->m_u32TTL) { // First or update message
-                        pSQAnswer->m_TTLIP4Address.set(p_pAAnswer->m_u32TTL, millis());
-                        DEBUG_EX_INFO(
-                                DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseResponse: Updated TTL for "));
-                                _printRRDomain(pSQAnswer->m_ServiceDomain);
-                                DEBUG_OUTPUT.printf(F(" IP4Address\n"));
-                        );
-                        if (pSQAnswer->m_IP4Address != p_pAAnswer->m_IPAddress) {
-                            pSQAnswer->m_IP4Address = p_pAAnswer->m_IPAddress;
-                            pSQAnswer->m_u32ContentFlags |= ServiceQueryAnswerType_IP4Address;
+                	stcMDNSServiceQuery::stcAnswer::stcIP4Address*  pIP4Address = pSQAnswer->findIP4Address(p_pAAnswer->m_IPAddress);
+                    if (pIP4Address) {
+                        // Already known IP4 address
+                        if (p_pAAnswer->m_u32TTL) { // Valid TTL -> Update answers TTL
+                            pIP4Address->m_TTL.set(p_pAAnswer->m_u32TTL, millis());
+                            DEBUG_EX_INFO(
+                                    DEBUG_OUTPUT.printf(F("[MDNSResponder] _processAAnswer: Updated TTL for "));
+                                    _printRRDomain(pSQAnswer->m_ServiceDomain);
+                                    DEBUG_OUTPUT.printf(F(" IP4Address (%s)\n"), pIP4Address->m_IPAddress.toString().c_str());
+                            );
+                        }
+                        else {                      // 'Goodbye' message for known IP4 address
+                            pIP4Address->m_TTL.set(1, millis());            // See RFC 6762, 10.1
+                            pIP4Address->m_TTL.m_bUpdateScheduled = true;   // Avoid 'cache update' query
+                            DEBUG_EX_INFO(
+                                    DEBUG_OUTPUT.printf(F("[MDNSResponder] _processAAnswer: 'Goodbye' received for "));
+                                    _printRRDomain(pSQAnswer->m_ServiceDomain);
+                                    DEBUG_OUTPUT.printf(F(" IP4 address (%s)\n"), pIP4Address->m_IPAddress.toString().c_str());
+                            );
+                        }                                
+                    }
+                    else {
+                        // Until now unknown IP4 address -> Add (if the message isn't just a 'Goodbye' note)
+                        if (p_pAAnswer->m_u32TTL) { // NOT just a 'Goodbye' message
+                            pIP4Address = new stcMDNSServiceQuery::stcAnswer::stcIP4Address(p_pAAnswer->m_IPAddress, p_pAAnswer->m_u32TTL, millis());
+                            if ((pIP4Address) &&
+                                (pSQAnswer->addIP4Address(pIP4Address))) {
+                                
+                                pSQAnswer->m_u32ContentFlags |= ServiceQueryAnswerType_IP4Address;
 
-                            p_rbFoundNewQueryAnswer = true;
-                            if (pServiceQuery->m_fnCallback) {
-                                pServiceQuery->m_fnCallback(this, (hMDNSServiceQuery)pServiceQuery, pServiceQuery->indexOfAnswer(pSQAnswer), ServiceQueryAnswerType_IP4Address, true, pServiceQuery->m_pUserdata);
+                                if (pServiceQuery->m_fnCallback) {
+                                    pServiceQuery->m_fnCallback(this, (hMDNSServiceQuery)pServiceQuery, pServiceQuery->indexOfAnswer(pSQAnswer), ServiceQueryAnswerType_IP4Address, true, pServiceQuery->m_pUserdata);
+                                }
+                            }
+                            else {   
+                                DEBUG_EX_ERR(DEBUG_OUTPUT.printf(F("[MDNSResponder] _processAAnswer: FAILED to add IP4 address (%s)!\n"), p_pAAnswer->m_IPAddress.toString().c_str()););
                             }
                         }
-                    }
-                    else {                      // Goodby message
-                        pSQAnswer->m_TTLIP4Address.set(1, millis());            // See RFC 6762, 10.1
-                        pSQAnswer->m_TTLIP4Address.m_bUpdateScheduled = true;   // Avoid 'cache update' query
-                        DEBUG_EX_INFO(
-                                DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseResponse: 'Goodbye' received for "));
-                                _printRRDomain(pSQAnswer->m_ServiceDomain);
-                                DEBUG_OUTPUT.printf(F(" IP4Address\n"));
-                        );
                     }
                 }
                 pServiceQuery = pServiceQuery->m_pNext;
             }   // while(service query)         
         }   // else: No p_pAAnswer
-        DEBUG_EX_ERR(if (!bResult) { DEBUG_OUTPUT.printf(F("[MDNSResponder] _processAAAnswer: FAILED!\n")); });
+        DEBUG_EX_ERR(if (!bResult) { DEBUG_OUTPUT.printf(F("[MDNSResponder] _processAAnswer: FAILED!\n")); });
         return bResult;
     }
 #endif
@@ -944,8 +955,7 @@ bool MDNSResponder::_processTXTAnswer(const MDNSResponder::stcMDNS_RRAnswerTXT* 
     /*
      * MDNSResponder::_processAAAAAnswer
      */
-    bool MDNSResponder::_processAAAAAnswer(const MDNSResponder::stcMDNS_RRAnswerAAAA* p_pAAAAAnswer,
-                                           bool& p_rbFoundNewQueryAnswer) {
+    bool MDNSResponder::_processAAAAAnswer(const MDNSResponder::stcMDNS_RRAnswerAAAA* p_pAAAAAnswer) {
         
         bool    bResult = false;
         
@@ -956,31 +966,44 @@ bool MDNSResponder::_processTXTAnswer(const MDNSResponder::stcMDNS_RRAnswerTXT* 
             while (pServiceQuery) {
                 stcMDNSServiceQuery::stcAnswer* pSQAnswer = pServiceQuery->findAnswerForHostDomain(p_pAAAAAnswer->m_Header.m_Domain);
                 if (pSQAnswer) {    // Answer for this host domain (eg. esp8266.local) available
-                    if (p_pAAAAAnswer->m_u32TTL) {  // First or update message
-                        pSQAnswer->m_TTLIP6Address.set(p_pAAAAAnswer->m_u32TTL, millis());
-                        DEBUG_EX_INFO(
-                                DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseResponse: Updated TTL for "));
-                                _printRRDomain(pSQAnswer->m_ServiceDomain);
-                                DEBUG_OUTPUT.printf(F(" IP6Address\n"));
-                        );
-                        if (pSQAnswer->m_IP6Address != p_pAAAAAnswer->m_IPAddress) {
-                            pSQAnswer->m_IP6Address = p_pAAAAAnswer->m_IPAddress;
-                            pSQAnswer->m_u32ContentFlags |= ServiceQueryAnswerType_IP6Address;
-                            
-                            p_rbFoundNewQueryAnswer = true;
-                            if (pServiceQuery->m_fnCallback) {
-                                pServiceQuery->m_fnCallback(this, (hMDNSServiceQuery)pServiceQuery, pServiceQuery->indexOfAnswer(pSQAnswer), ServiceQueryAnswerType_IP6Address, true, pServiceQuery->m_pUserdata);
+                    stcIP6Address*  pIP6Address = pSQAnswer->findIP6Address(p_pAAAAAnswer->m_IPAddress);
+                    if (pIP6Address) {
+                        // Already known IP6 address
+                        if (p_pAAAAAnswer->m_u32TTL) { // Valid TTL -> Update answers TTL
+                            pIP6Address->m_TTL.set(p_pAAAAAnswer->m_u32TTL, millis());
+                            DEBUG_EX_INFO(
+                                    DEBUG_OUTPUT.printf(F("[MDNSResponder] _processAAnswer: Updated TTL for "));
+                                    _printRRDomain(pSQAnswer->m_ServiceDomain);
+                                    DEBUG_OUTPUT.printf(F(" IP6 address (%s)\n"), pIP6Address->m_IPAddress.toString().c_str());
+                            );
+                        }
+                        else {                      // 'Goodbye' message for known IP6 address
+                            pIP6Address->m_TTL.set(1, millis());            // See RFC 6762, 10.1
+                            pIP6Address->m_TTL.m_bUpdateScheduled = true;   // Avoid 'cache update' query
+                            DEBUG_EX_INFO(
+                                    DEBUG_OUTPUT.printf(F("[MDNSResponder] _processAAnswer: 'Goodbye' received for "));
+                                    _printRRDomain(pSQAnswer->m_ServiceDomain);
+                                    DEBUG_OUTPUT.printf(F(" IP6 address (%s)\n"), pIP6Address->m_IPAddress.toString().c_str());
+                            );
+                        }                                
+                    }
+                    else {
+                        // Until now unknown IP6 address -> Add (if the message isn't just a 'Goodbye' note)
+                        if (p_pAAAAAnswer->m_u32TTL) { // NOT just a 'Goodbye' message
+                            pIP6Address = new stcIP6Address(p_pAAAAAnswer->m_IPAddress, p_pAAAAAnswer->m_u32TTL, millis());
+                            if ((pIP6Address) &&
+                                (pSQAnswer->addIP6Address(pIP6Address))) {
+                                
+                                pSQAnswer->m_u32ContentFlags |= ServiceQueryAnswerType_IP6Address;
+
+                                if (pServiceQuery->m_fnCallback) {
+                                    pServiceQuery->m_fnCallback(this, (hMDNSServiceQuery)pServiceQuery, pServiceQuery->indexOfAnswer(pSQAnswer), ServiceQueryAnswerType_IP6Address, true, pServiceQuery->m_pUserdata);
+                                }
+                            }
+                            else {   
+                                DEBUG_EX_ERR(DEBUG_OUTPUT.printf(F("[MDNSResponder] _processAAnswer: FAILED to add IP6 address (%s)!\n"), p_pAAAAAnswer->m_IPAddress.toString().c_str()););
                             }
                         }
-                    }
-                    else {                      // Goodby message
-                        pSQAnswer->m_TTLIP6Address.set(1, millis());            // See RFC 6762, 10.1
-                        pSQAnswer->m_TTLIP6Address.m_bUpdateScheduled = true;   // Avoid 'cache update' query
-                        DEBUG_EX_INFO(
-                                DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseResponse: 'Goodbye' received for "));
-                                _printRRDomain(pSQAnswer->m_ServiceDomain);
-                                DEBUG_OUTPUT.printf(F(" IP6Address\n"));
-                        );
                     }
                 }
                 pServiceQuery = pServiceQuery->m_pNext;
@@ -1385,10 +1408,11 @@ bool MDNSResponder::_hasServiceQueriesWaitingForAnswers(void) const {
 /*
  * MDNSResponder::_checkServiceQueryCache
  *
- * For any 'living' service query (m_bAwaitingAnswers == true) all available answers (their parts)
- * are checked for topicality based on the stored reception time ans the answers TTL.
- * When the parts TTL is outlasted by more than 80%, a new question is generated, to get updated information.
- * When no update arrived (in time), the answer part is removed from the cache.
+ * For any 'living' service query (m_bAwaitingAnswers == true) all available answers (their components)
+ * are checked for topicality based on the stored reception time and the answers TTL.
+ * When the components TTL is outlasted by more than 80%, a new question is generated, to get updated information.
+ * When no update arrived (in time), the component is removed from the answer (cache).
+ *
  */
 bool MDNSResponder::_checkServiceQueryCache(void) {
     
@@ -1403,7 +1427,9 @@ bool MDNSResponder::_checkServiceQueryCache(void) {
                 stcMDNSServiceQuery::stcAnswer* pNextSQAnswer = pSQAnswer->m_pNext;
                 
                 // 1. level answer
-                if (pSQAnswer->m_TTLServiceDomain.has80Percent(u32Now)) {
+                if ((bResult) &&
+                    (pSQAnswer->m_TTLServiceDomain.has80Percent(u32Now))) {
+                    
                     bResult = ((_sendMDNSServiceQuery(*pServiceQuery)) &&
                                ((pSQAnswer->m_TTLServiceDomain.m_bUpdateScheduled = true)));
                     DEBUG_EX_INFO(
@@ -1412,18 +1438,23 @@ bool MDNSResponder::_checkServiceQueryCache(void) {
                             DEBUG_OUTPUT.printf(F(" %s\n"), (bResult ? "OK" : "FAILURE"));
                     );
                 }
-                else if (pSQAnswer->m_TTLServiceDomain.isOutdated(u32Now)) {
+                else if ((bResult) &&
+                         (pSQAnswer->m_TTLServiceDomain.isOutdated(u32Now))) {
+                    
                     // Delete
                     if (pServiceQuery->m_fnCallback) {
-                        pServiceQuery->m_fnCallback(this, (hMDNSServiceQuery)pServiceQuery, (uint32_t)(-1), ServiceQueryAnswerType_ServiceDomain, false, pServiceQuery->m_pUserdata);
+                        pServiceQuery->m_fnCallback(this, (hMDNSServiceQuery)pServiceQuery, pServiceQuery->indexOfAnswer(pSQAnswer)/*(uint32_t)(-1)*/, ServiceQueryAnswerType_ServiceDomain, false, pServiceQuery->m_pUserdata);
                     }
                     bResult = pServiceQuery->removeAnswer(pSQAnswer);
                     pSQAnswer = 0;
                     continue;   // Don't use this answer anymore
                 }
+                
                 // 2. level answers
                 // HostDomain & Port (from SRV)
-                if (pSQAnswer->m_TTLHostDomainAndPort.has80Percent(u32Now)) {
+                if ((bResult) &&
+                    (pSQAnswer->m_TTLHostDomainAndPort.has80Percent(u32Now))) {
+                    
                     bResult = ((_sendMDNSQuery(pSQAnswer->m_ServiceDomain, DNS_RRTYPE_SRV)) &&
                                ((pSQAnswer->m_TTLHostDomainAndPort.m_bUpdateScheduled = true)));
                     DEBUG_EX_INFO(
@@ -1432,7 +1463,9 @@ bool MDNSResponder::_checkServiceQueryCache(void) {
                             DEBUG_OUTPUT.printf(F(" host domain and port %s\n"), (bResult ? "OK" : "FAILURE"));
                     );
                 }
-                else if (pSQAnswer->m_TTLHostDomainAndPort.isOutdated(u32Now)) {
+                else if ((bResult) &&
+                         (pSQAnswer->m_TTLHostDomainAndPort.isOutdated(u32Now))) {
+                    
                     // Delete
                     pSQAnswer->m_HostDomain.clear();
                     pSQAnswer->releaseHostDomain();
@@ -1441,13 +1474,11 @@ bool MDNSResponder::_checkServiceQueryCache(void) {
                     uint32_t    u32ContentFlags = ServiceQueryAnswerType_HostDomainAndPort;
                     // As the host domain is the base for the IP4- and IP6Address, remove these too
 #ifdef MDNS_IP4_SUPPORT
-                    pSQAnswer->m_IP4Address = IPAddress();
-                    pSQAnswer->m_TTLIP4Address.set(0, 0);
+                    pSQAnswer->releaseIP4Addresses();
                     u32ContentFlags |= ServiceQueryAnswerType_IP4Address;
 #endif
 #ifdef MDNS_IP6_SUPPORT
-                    pSQAnswer->m_IP6Address = IPAddress();
-                    pSQAnswer->m_TTLIP6Address.set(0, 0);
+                    pSQAnswer->releaseIP6Addresses();
                     u32ContentFlags |= ServiceQueryAnswerType_IP6Address;
 #endif
 
@@ -1458,8 +1489,11 @@ bool MDNSResponder::_checkServiceQueryCache(void) {
                         pServiceQuery->m_fnCallback(this, (hMDNSServiceQuery)pServiceQuery, pServiceQuery->indexOfAnswer(pSQAnswer), u32ContentFlags, false, pServiceQuery->m_pUserdata);
                     }
                 }
+                
                 // Txts (from TXT)
-                if (pSQAnswer->m_TTLTxts.has80Percent(u32Now)) {
+                if ((bResult) &&
+                    (pSQAnswer->m_TTLTxts.has80Percent(u32Now))) {
+                    
                     bResult = ((_sendMDNSQuery(pSQAnswer->m_ServiceDomain, DNS_RRTYPE_TXT)) &&
                                ((pSQAnswer->m_TTLTxts.m_bUpdateScheduled = true)));
                     DEBUG_EX_INFO(
@@ -1468,7 +1502,9 @@ bool MDNSResponder::_checkServiceQueryCache(void) {
                             DEBUG_OUTPUT.printf(F(" TXTs %s\n"), (bResult ? "OK" : "FAILURE"));
                     );
                 }
-                else if (pSQAnswer->m_TTLTxts.isOutdated(u32Now)) {
+                else if ((bResult) &&
+                         (pSQAnswer->m_TTLTxts.isOutdated(u32Now))) {
+                    
                     // Delete
                     pSQAnswer->m_Txts.clear();
                     pSQAnswer->m_TTLTxts.set(0, 0);
@@ -1480,49 +1516,81 @@ bool MDNSResponder::_checkServiceQueryCache(void) {
                         pServiceQuery->m_fnCallback(this, (hMDNSServiceQuery)pServiceQuery, pServiceQuery->indexOfAnswer(pSQAnswer), ServiceQueryAnswerType_Txts, false, pServiceQuery->m_pUserdata);
                     }
                 }
+                
                 // 3. level answers
 #ifdef MDNS_IP4_SUPPORT
                 // IP4Address (from A)
-                if (pSQAnswer->m_TTLIP4Address.has80Percent(u32Now)) {
-                    bResult = ((_sendMDNSQuery(pSQAnswer->m_HostDomain, DNS_RRTYPE_A)) &&
-                               ((pSQAnswer->m_TTLIP4Address.m_bUpdateScheduled = true)));
-                    DEBUG_EX_INFO(
-                            DEBUG_OUTPUT.printf(F("[MDNSResponder] _checkServiceQueryCache: Update scheduled for "));
-                            _printRRDomain(pSQAnswer->m_ServiceDomain);
-                            DEBUG_OUTPUT.printf(F(" IP4Address %s\n"), (bResult ? "OK" : "FAILURE"));
-                    );
-                }
-                else if (pSQAnswer->m_TTLIP4Address.isOutdated(u32Now)) {
-                    // Delete
-                    pSQAnswer->m_IP4Address = IPAddress();
-                    pSQAnswer->m_TTLIP4Address.set(0, 0);
+                stcMDNSServiceQuery::stcAnswer::stcIP4Address*  pIP4Address = pSQAnswer->m_pIP4Addresses;
+                bool                                            bAUpdateQuerySent = false;
+                while ((pIP4Address) &&
+                       (bResult)) {
+                           
+                	stcMDNSServiceQuery::stcAnswer::stcIP4Address*  pNextIP4Address = pIP4Address->m_pNext; // Get 'next' early, as 'current' may be deleted at the end...
                     
-                    // Remove content flags for deleted answer parts
-                    pSQAnswer->m_u32ContentFlags &= ~ServiceQueryAnswerType_IP4Address;
-
-                    if (pServiceQuery->m_fnCallback) {
-                        pServiceQuery->m_fnCallback(this, (hMDNSServiceQuery)pServiceQuery, pServiceQuery->indexOfAnswer(pSQAnswer), ServiceQueryAnswerType_IP4Address, false, pServiceQuery->m_pUserdata);
+                    if (pIP4Address->m_TTL.has80Percent(u32Now)) {      // Needs update
+                        if ((bAUpdateQuerySent) ||
+                            ((bResult = _sendMDNSQuery(pSQAnswer->m_HostDomain, DNS_RRTYPE_A)))) {
+                            
+                            pIP4Address->m_TTL.m_bUpdateScheduled = true;
+                            bAUpdateQuerySent = true;
+                            
+                            DEBUG_EX_INFO(
+                                    DEBUG_OUTPUT.printf(F("[MDNSResponder] _checkServiceQueryCache: Update scheduled for "));
+                                    _printRRDomain(pSQAnswer->m_ServiceDomain);
+                                    DEBUG_OUTPUT.printf(F(" IP4 address (%s)\n"), (pIP4Address->m_IPAddress.toString().c_str()));
+                            );
+                        }
                     }
-                }
+                    else if (pIP4Address->m_TTL.isOutdated(u32Now)) {   // Outdated: can be deleted
+                        pSQAnswer->removeIP4Address(pIP4Address);
+                        if (!pSQAnswer->m_pIP4Addresses) {  // NO IP4 address left -> remove content flag
+                            pSQAnswer->m_u32ContentFlags &= ~ServiceQueryAnswerType_IP4Address;
+                        }
+                        // Notify client
+                        if (pServiceQuery->m_fnCallback) {
+                            pServiceQuery->m_fnCallback(this, (hMDNSServiceQuery)pServiceQuery, pServiceQuery->indexOfAnswer(pSQAnswer), ServiceQueryAnswerType_IP4Address, false, pServiceQuery->m_pUserdata);
+                        }
+                    }
+                    
+                    pIP4Address = pNextIP4Address;  // Next
+                }   // while
 #endif
 #ifdef MDNS_IP6_SUPPORT
                 // IP6Address (from AAAA)
-                if (pSQAnswer->m_TTLIP6Address.has80Percent(u32Now)) {
-                    bResult = ((_sendMDNSQuery(pSQAnswer->m_HostDomain, DNS_RRTYPE_AAAA)) &&
-                               ((pSQAnswer->m_TTLIP6Address.m_bUpdateScheduled = true)));
-                }
-                else if (pSQAnswer->m_TTLIP6Address.isOutdated(u32Now)) {
-                    // Delete
-                    pSQAnswer->m_IP6Address = IPAddress();
-                    pSQAnswer->m_TTLIP6Address.set(0, 0);
+                stcMDNSServiceQuery::stcAnswer::stcIP6Address*  pIP6Address = pSQAnswer->m_pIP6Addresses;
+                bool                                            bAAAAUpdateQuerySent = false;
+                while ((pIP6Address) &&
+                       (bResult)) {
+                           
+                	stcMDNSServiceQuery::stcAnswer::stcIP6Address*  pNextIP6Address = pIP6Address->m_pNext; // Get 'next' early, as 'current' may be deleted at the end...
                     
-                    // Remove content flags for deleted answer parts
-                    pSQAnswer->m_u32ContentFlags &= ~ServiceQueryAnswerType_IP6Address;
-
-                    if (pServiceQuery->m_fnCallback) {
-                        pServiceQuery->m_fnCallback(this, (hMDNSServiceQuery)pServiceQuery, pServiceQuery->indexOfAnswer(pSQAnswer), ServiceQueryAnswerType_IP6Address, false, pServiceQuery->m_pUserdata);
+                    if (pIP6Address->m_TTL.has80Percent(u32Now)) {      // Needs update
+                        if ((bAAAAUpdateQuerySent) ||
+                            ((bResult = _sendMDNSQuery(pSQAnswer->m_HostDomain, DNS_RRTYPE_AAAA)))) {
+                            
+                            pIP6Address->m_TTL.m_bUpdateScheduled = true;
+                            bAAAAUpdateQuerySent = true;
+                            
+                            DEBUG_EX_INFO(
+                                    DEBUG_OUTPUT.printf(F("[MDNSResponder] _checkServiceQueryCache: Update scheduled for "));
+                                    _printRRDomain(pSQAnswer->m_ServiceDomain);
+                                    DEBUG_OUTPUT.printf(F(" IP6 address (%s)\n"), (pIP6Address->m_IPAddress.toString().c_str()));
+                            );
+                        }
                     }
-                }
+                    else if (pIP6Address->m_TTL.isOutdated(u32Now)) {   // Outdated: can be deleted
+                        pSQAnswer->removeIP6Address(pIP6Address);
+                        if (!pSQAnswer->m_pIP6Addresses) {  // NO IP6 address left -> remove content flag
+                            pSQAnswer->m_u32ContentFlags &= ~ServiceQueryAnswerType_IP6Address;
+                        }
+                        // Notify client
+                        if (pServiceQuery->m_fnCallback) {
+                            pServiceQuery->m_fnCallback(this, (hMDNSServiceQuery)pServiceQuery, pServiceQuery->indexOfAnswer(pSQAnswer), ServiceQueryAnswerType_IP6Address, false, pServiceQuery->m_pUserdata);
+                        }
+                    }
+                    
+                    pIP6Address = pNextIP6Address;  // Next
+                }   // while
 #endif
                 pSQAnswer = pNextSQAnswer;
             }

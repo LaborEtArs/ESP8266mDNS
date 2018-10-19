@@ -1402,6 +1402,26 @@ bool MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcTTL::isOutdated(uint32
             ((p_u32Now - m_u32Millis) > (m_u32TTL * 1000)));
 }
 
+
+#ifdef MDNS_IP4_SUPPORT
+/**
+ * MDNSResponder::stcMDNSServiceQuery::stcAnswer::stcIP4Address
+ *
+ */
+
+/*
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP4Address::_stcIP4Address constructor
+ */
+MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP4Address::_stcIP4Address(IPAddress p_IPAddress,
+                                                                                uint32_t p_u32TTL /*= 0*/,
+                                                                                uint32_t p_u32Millis /*= 0*/)
+:   m_pNext(0),
+    m_IPAddress(p_IPAddress),
+    m_TTL(p_u32TTL, p_u32Millis) {
+}
+#endif
+
+
 /**
  * MDNSResponder::stcMDNSServiceQuery::stcAnswer
  */
@@ -1415,8 +1435,13 @@ MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcAnswer(void)
     m_pcHostDomain(0),
     m_u16Port(0),
     m_pcTxts(0),
-    m_u32ContentFlags(0) {
-    
+#ifdef MDNS_IP4_SUPPORT
+    m_pIP4Addresses(0),
+#endif
+#ifdef MDNS_IP6_SUPPORT
+    m_pIP6Addresses(0),
+#endif
+	m_u32ContentFlags(0) {
 }
 
 /*
@@ -1433,6 +1458,12 @@ MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::~_stcAnswer(void) {
 bool MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::clear(void) {
     
     return ((releaseTxts()) &&
+#ifdef MDNS_IP4_SUPPORT
+            (releaseIP4Addresses()) &&
+#endif
+#ifdef MDNS_IP6_SUPPORT
+            (releaseIP6Addresses())
+#endif
             (releaseHostDomain()) &&
             (releaseServiceDomain()));
 }
@@ -1517,6 +1548,241 @@ bool MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::releaseTxts(void) {
     }
     return true;
 }
+
+#ifdef MDNS_IP4_SUPPORT
+/*
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::releaseIP4Addresses
+ */
+bool MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::releaseIP4Addresses(void) {
+    
+    while (m_pIP4Addresses) {
+        stcIP4Address*  pNext = m_pIP4Addresses->m_pNext;
+        delete m_pIP4Addresses;
+        m_pIP4Addresses = pNext;
+    }
+    return true;
+}
+
+/*
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::addIP4Address
+ */
+bool MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::addIP4Address(MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP4Address* p_pIP4Address) {
+    
+    bool bResult = false;
+    
+    if (p_pIP4Address) {
+        p_pIP4Address->m_pNext = m_pIP4Addresses;
+        m_pIP4Addresses = p_pIP4Address;
+        bResult = true;
+    }
+    return bResult;
+}
+
+/*
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::removeIP4Address
+ */
+bool MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::removeIP4Address(MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP4Address* p_pIP4Address) {
+    
+    bool    bResult = false;
+    
+    if (p_pIP4Address) {
+        stcIP4Address*  pPred = m_pIP4Addresses;
+        while ((pPred) &&
+               (pPred->m_pNext != p_pIP4Address)) {
+            pPred = pPred->m_pNext;
+        }
+        if (pPred) {
+            pPred->m_pNext = p_pIP4Address->m_pNext;
+            delete p_pIP4Address;
+            bResult = true;
+        }
+        else if (m_pIP4Addresses == p_pIP4Address) {   // No predecesor, but first item
+            m_pIP4Addresses = p_pIP4Address->m_pNext;
+            delete p_pIP4Address;
+            bResult = true;
+        }
+    }
+    return bResult;
+}
+
+/*
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::findIP4Address (const)
+ */
+const MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP4Address* MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::findIP4Address(const IPAddress& p_IPAddress) const {
+
+    return (stcIP4Address*)(((const _stcAnswer*)this)->findIP4Address(p_IPAddress));
+}
+
+/*
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::findIP4Address
+ */
+MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP4Address* MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::findIP4Address(const IPAddress& p_IPAddress) {
+    
+    stcIP4Address*  pIP4Address = m_pIP4Addresses;
+    while (pIP4Address) {
+        if (pIP4Address->m_IPAddress == p_IPAddress) {
+            break;
+        }
+        pIP4Address = pIP4Address->m_pNext;
+    }
+    return pIP4Address;
+}
+
+/*
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP4AddressCount
+ */
+uint32_t MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP4AddressCount(void) const {
+    
+    uint32_t    u32Count = 0;
+    
+    stcIP4Address*  pIP4Address = m_pIP4Addresses;
+    while (pIP4Address) {
+        ++u32Count;
+        pIP4Address = pIP4Address->m_pNext;
+    }
+    return u32Count;
+}
+
+/*
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP4AddressAtIndex (const)
+ */
+const MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP4Address* MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP4AddressAtIndex(uint32_t p_u32Index) const {
+
+    return (stcIP4Address*)(((const _stcAnswer*)this)->IP4AddressAtIndex(p_u32Index));
+}
+
+/*
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP4AddressAtIndex
+ */
+MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP4Address* MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP4AddressAtIndex(uint32_t p_u32Index) {
+    
+    stcIP4Address*    pIP4Address = 0;
+    
+    if ((uint32_t)(-1) != p_u32Index) {
+        uint32_t    u32Index;
+        for (pIP4Address=m_pIP4Addresses, u32Index=0; ((pIP4Address) && (u32Index<p_u32Index)); pIP4Address=pIP4Address->m_pNext, ++u32Index);
+    }
+    return pIP4Address;
+}
+#endif
+
+#ifdef MDNS_IP6_SUPPORT
+/*
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::releaseIP6Addresses
+ */
+bool MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::releaseIP6Addresses(void) {
+    
+    while (m_pIP6Addresses) {
+        stcIP6Address*  pNext = m_pIP6Addresses->m_pNext;
+        delete m_pIP6Addresses;
+        m_pIP6Addresses = pNext;
+    }
+    return true;
+}
+
+/*
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::addIP6Address
+ */
+bool MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::addIP6Address(MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP6Address* p_pIP6Address) {
+    
+    bool bResult = false;
+    
+    if (p_pIP6Address) {
+        p_pIP6Address->m_pNext = m_pIP6Addresses;
+        m_pIP6Addresses = p_pIP6Address;
+        bResult = true;
+    }
+    return bResult;
+}
+
+/*
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::removeIP6Address
+ */
+bool MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::removeIP6Address(MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP6Address* p_pIP6Address) {
+    
+    bool    bResult = false;
+    
+    if (p_pIP6Address) {
+        stcIP6Address*  pPred = m_pIP6Addresses;
+        while ((pPred) &&
+               (pPred->m_pNext != p_pIP6Address)) {
+            pPred = pPred->m_pNext;
+        }
+        if (pPred) {
+            pPred->m_pNext = p_pIP6Address->m_pNext;
+            delete p_pIP6Address;
+            bResult = true;
+        }
+        else if (m_pIP6Addresses == p_pIP6Address) {   // No predecesor, but first item
+            m_pIP6Addresses = p_pIP6Address->m_pNext;
+            delete p_pIP6Address;
+            bResult = true;
+        }
+    }
+    return bResult;
+}
+
+/*
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::findIP6Address (const)
+ */
+const MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP6Address* MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::findIP6Address(const IP6Address& p_IPAddress) const {
+
+    return (stcIP6Address*)(((const _stcAnswer*)this)->findIP6Address(p_IPAddress));
+}
+
+/*
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::findIP6Address
+ */
+MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP6Address* MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::findIP6Address(const IPAddress& p_IPAddress) {
+    
+    stcIP6Address*  pIP6Address = m_pIP6Addresses;
+    while (pIP6Address) {
+        if (p_IP6Address->m_IPAddress == p_IPAddress) {
+            break;
+        }
+        pIP6Address = pIP6Address->m_pNext;
+    }
+    return pIP6Address;
+}
+
+/*
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP6AddressCount
+ */
+uint32_t MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP6AddressCount(void) const {
+    
+    uint32_t    u32Count = 0;
+    
+    stcIP6Address*  pIP6Address = m_pIP6Addresses;
+    while (pIP6Address) {
+        ++u32Count;
+        pIP6Address = pIP6Address->m_pNext;
+    }
+    return u32Count;
+}
+
+/*
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP6AddressAtIndex (const)
+ */
+const MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP6Address* MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP6AddressAtIndex(uint32_t p_u32Index) const {
+
+    return (stcIP6Address*)(((const _stcAnswer*)this)->IP6AddressAtIndex(p_u32Index));
+}
+
+/*
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP6AddressAtIndex
+ */
+MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP6Address* MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP6AddressAtIndex(uint32_t p_u32Index) {
+    
+    stcIP6Address*    pIP6Address = 0;
+    
+    if ((uint32_t)(-1) != p_u32Index) {
+        uint32_t    u32Index;
+        for (pIP6Address=m_pIP6Addresses, u32Index=0; ((pIP6Address) && (u32Index<p_u32Index)); pIP6Address=pIP6Address->m_pNext, ++u32Index);
+    }
+    return pIP6Address;
+}
+#endif
+
 
 /**
  * MDNSResponder::stcMDNSServiceQuery

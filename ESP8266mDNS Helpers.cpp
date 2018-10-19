@@ -33,6 +33,123 @@
  */
 
 /*
+ * strrstr (static)
+ *
+ * Backwards search for p_pcPattern in p_pcString
+ * Based on: https://stackoverflow.com/a/1634398/2778898
+ *
+ */
+static const char* strrstr(const char*__restrict p_pcString, const char*__restrict p_pcPattern) {
+    
+    const char* pcResult = 0;
+    
+    size_t      stStringLength = (p_pcString ? strlen(p_pcString) : 0);
+    size_t      stPatternLength = (p_pcPattern ? strlen(p_pcPattern) : 0);
+
+    if ((stStringLength) &&
+        (stPatternLength) &&
+        (stPatternLength <= stStringLength)) {
+        // Pattern is shorter or has the same length tham the string
+        
+        for (const char* s=(p_pcString + stStringLength - stPatternLength); s>=p_pcString; --s) {
+            if (0 == strncmp(s, p_pcPattern, stPatternLength)) {
+                pcResult = s;
+                break;
+            }
+        }
+    }
+    return pcResult;
+}
+
+/*
+ * MDNSResponder::updateDomain (static)
+ *
+ * Updates the given domain 'p_rpcHostname' by appending a delimiter and an index number.
+ *
+ * If the given domain already hasa numeric index (after the given delimiter), this index
+ * incremented. If not, the delimiter and index '2' is added.
+ *
+ * If 'p_rpcHostname' is empty (==0), the given default name 'p_pcDefaultHostname' is used,
+ * if no default is given, 'esp8266' is used.
+ *
+ */
+/*static*/ bool MDNSResponder::updateDomain(char*& p_rpcDomain,
+                                            const char* p_pcDivider /*= "-"*/,
+                                            const char* p_pcDefaultDomain /*= 0*/) {
+
+    bool	bResult = false;
+
+    // Ensure a divider exists; use '-' as default
+    const char*   pcDivider = (p_pcDivider ?: "-");
+
+    if (p_rpcDomain) {
+        const char* pFoundDivider = strrstr(p_rpcDomain, pcDivider);
+        if (pFoundDivider) {    // maybe already extended
+            char*         pEnd = 0;
+            unsigned long ulIndex = strtoul((pFoundDivider + os_strlen(pcDivider)), &pEnd, 10);
+            if ((ulIndex) &&
+                ((pEnd - p_rpcDomain) == os_strlen(p_rpcDomain)) &&
+                (!*pEnd)) {       // Valid (old) index found
+
+                char    acIndexBuffer[16];
+                sprintf(acIndexBuffer, "%lu", (++ulIndex));
+                size_t  stLength = ((pFoundDivider - p_rpcDomain + os_strlen(pcDivider)) + os_strlen(acIndexBuffer) + 1);
+                char*   pNewHostname = new char[stLength];
+                if (pNewHostname) {
+                    memcpy(pNewHostname, p_rpcDomain, (pFoundDivider - p_rpcDomain + os_strlen(pcDivider)));
+                    pNewHostname[pFoundDivider - p_rpcDomain + os_strlen(pcDivider)] = 0;
+                    os_strcat(pNewHostname, acIndexBuffer);
+
+                    delete[] p_rpcDomain;
+                    p_rpcDomain = pNewHostname;
+
+                    bResult = true;
+                }
+                else {
+                    DEBUG_EX_ERR(DEBUG_OUTPUT.println(F("[MDNSResponder] updateDomain: FAILED to alloc new hostname!")););
+                }
+            }
+            else {
+                pFoundDivider = 0;  // Flag the need to (base) extend the hostname
+            }
+        }
+
+        if (!pFoundDivider) {   // not yet extended (or failed to increment extension) -> start indexing
+            size_t    stLength = os_strlen(p_rpcDomain) + (os_strlen(pcDivider) + 1 + 1);	// Name + Divider + '2' + '\0'
+            char*     pNewHostname = new char[stLength];
+            if (pNewHostname) {
+                sprintf(pNewHostname, "%s%s2", p_rpcDomain, pcDivider);
+
+                delete[] p_rpcDomain;
+                p_rpcDomain = pNewHostname;
+
+                bResult = true;
+            }
+            else {
+                DEBUG_EX_ERR(DEBUG_OUTPUT.println(F("[MDNSResponder] updateDomain: FAILED to alloc new hostname!")););
+            }
+        }
+    }
+    else {
+        // No given host domain, use base or default
+        const char* cpcDefaultName = (p_pcDefaultDomain ?: "esp8266");
+
+        size_t      stLength = os_strlen(cpcDefaultName) + 1;	// '\0'
+        p_rpcDomain = new char[stLength];
+        if (p_rpcDomain) {
+            os_strncpy(p_rpcDomain, cpcDefaultName, stLength);
+            bResult = true;
+        }
+        else {
+            DEBUG_EX_ERR(DEBUG_OUTPUT.println(F("[MDNSResponder] updateDomain: FAILED to alloc new hostname!")););
+        }
+    }
+    DEBUG_EX_INFO(DEBUG_OUTPUT.printf(F("[MDNSResponder] updateDomain: %s\n"), p_rpcHostname););
+    return bResult;
+}
+
+
+/*
  * UDP CONTEXT
  */
 
