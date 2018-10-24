@@ -44,6 +44,11 @@ extern "C" {
 #include "ESP8266mDNS Priv.h"
 
 
+/*
+ * namespace LEA_MDNSResponder
+ */
+namespace LEA_MDNSResponder {
+
 /**
  * CONTROL
  */
@@ -54,32 +59,33 @@ extern "C" {
  */
 
 /*
- * MDNSResponder::_update
+ * MDNSResponder::_process
  *
  * Run the MDNS process. Should be called in every 'loop'.
  *
  */
-bool MDNSResponder::_update(void) {
+bool MDNSResponder::_process(bool p_bUserContext) {
     
     bool    bResult = true;
     
     if ((m_pUDPContext) &&          // UDPContext available AND
         (m_pUDPContext->next())) {  // has content
-        //DEBUG_EX_INFO(DEBUG_OUTPUT.printf(F("[MDNSResponder] _update: Calling _parsePacket\n")););
+        //DEBUG_EX_INFO(DEBUG_OUTPUT.printf(F("[MDNSResponder] _update: Calling _parseMessage\n")););
         
         bResult = _parseMessage();
-        esp_yield();
+        if (p_bUserContext) {
+            yield();
+        }
         //DEBUG_EX_INFO(DEBUG_OUTPUT.printf(F("[MDNSResponder] _parsePacket %s\n"), (bResult ? "succeeded" : "FAILED")););
     }
-    
-    if (bResult) {                  // Probing
-        bResult = _updateProbeStatus();
+    else if (p_bUserContext) {
+        if (bResult) {              // Probing
+            bResult = _updateProbeStatus();
+        }
+        if (bResult) {              // Service query cache check
+            bResult = _checkServiceQueryCache();
+        }
     }
-    
-    if (bResult) {                  // Service query cache check
-        bResult = _checkServiceQueryCache();
-    }
-    
     return bResult;
 }
 
@@ -198,6 +204,10 @@ bool MDNSResponder::_parseQuery(const MDNSResponder::stcMDNS_MsgHeader& p_MsgHea
                                                     : 0);
                 u8HostOrServiceReplies |= (pService->m_u8ReplyMask |= u8ReplyMaskForQuestion);
                 DEBUG_EX_INFO(if (u8ReplyMaskForQuestion) { DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseQuery: Service reply needed for (%s.%s.%s): %u (%s)\n"), (pService->m_pcName ?: m_pcHostname), pService->m_pcService, pService->m_pcProtocol, u8ReplyMaskForQuestion, IPAddress(m_pUDPContext->getRemoteAddress()).toString().c_str()); } );
+                /*if ((u8ReplyMaskForQuestion) &&
+                    (0 == os_strcmp("hap", pService->m_pcService))) {
+                    DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseQuery: Service reply needed for (%s.%s.%s): %u (%s)\n"), (pService->m_pcName ?: m_pcHostname), pService->m_pcService, pService->m_pcProtocol, u8ReplyMaskForQuestion, IPAddress(m_pUDPContext->getRemoteAddress()).toString().c_str());
+                }*/
 
                 // Check tiebreak need for service domain
                 if (ProbingStatus_InProgress == pService->m_ProbeInformation.m_ProbingStatus) {
@@ -267,7 +277,7 @@ bool MDNSResponder::_parseQuery(const MDNSResponder::stcMDNS_MsgHeader& p_MsgHea
         esp_yield();
     }   // for questions
 
-    DEBUG_EX_INFO(if (u8HostOrServiceReplies) { DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseQuery: Reply needed: %u (%s: %s->%s)\n"), u8HostOrServiceReplies, clsTimeSyncer::timestr(2), IPAddress(m_pUDPContext->getRemoteAddress()).toString().c_str(), IPAddress(m_pUDPContext->getDestAddress()).toString().c_str()); } );
+    //DEBUG_EX_INFO(if (u8HostOrServiceReplies) { DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseQuery: Reply needed: %u (%s: %s->%s)\n"), u8HostOrServiceReplies, clsTimeSyncer::timestr(), IPAddress(m_pUDPContext->getRemoteAddress()).toString().c_str(), IPAddress(m_pUDPContext->getDestAddress()).toString().c_str()); } );
 
     // Handle known answers
     uint32_t    u32Answers = (p_MsgHeader.m_u16ANCount + p_MsgHeader.m_u16NSCount + p_MsgHeader.m_u16ARCount);
@@ -374,8 +384,13 @@ bool MDNSResponder::_parseQuery(const MDNSResponder::stcMDNS_MsgHeader& p_MsgHea
                 for (stcMDNSService* pService=m_pServices; pService; pService=pService->m_pNext) {
 
                     uint8_t u8ServiceMatchMask = (pService->m_u8ReplyMask & _replyMaskForService(pKnownRRAnswer->m_Header, *pService));
+
                     if ((u8ServiceMatchMask) &&                                 // The RR in the known answer matches an RR we are planning to send, AND
                         ((MDNS_SERVICE_TTL / 2) <= pKnownRRAnswer->m_u32TTL)) { // The TTL of the known answer is longer than half of the new service TTL (4500s)
+
+                        /*if ((0 == os_strcmp("hap", pService->m_pcService))) {
+                            DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseQuery: Known answer for (%s.%s.%s): %u (%s) %u\n"), (pService->m_pcName ?: m_pcHostname), pService->m_pcService, pService->m_pcProtocol, pKnownRRAnswer->answerType(), IPAddress(m_pUDPContext->getRemoteAddress()).toString().c_str(), pKnownRRAnswer->m_u32TTL);
+                        }*/
                         
                         if (AnswerType_PTR == pKnownRRAnswer->answerType()) {
                             stcMDNS_RRDomain    serviceDomain;
@@ -469,6 +484,11 @@ bool MDNSResponder::_parseQuery(const MDNSResponder::stcMDNS_MsgHeader& p_MsgHea
         uint8_t u8ReplyNeeded = sendParameter.m_u8HostReplyMask;
         for (stcMDNSService* pService=m_pServices; pService; pService=pService->m_pNext) {
             u8ReplyNeeded |= pService->m_u8ReplyMask;
+
+            if ((u8ReplyNeeded) &&
+                (0 == os_strcmp("hap", pService->m_pcService))) {
+                DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseQuery: Sending service reply for (%s.%s.%s): %u (%s)\n"), (pService->m_pcName ?: m_pcHostname), pService->m_pcService, pService->m_pcProtocol, u8ReplyNeeded, IPAddress(m_pUDPContext->getRemoteAddress()).toString().c_str());
+            }
         }
 
         if (u8ReplyNeeded) {
@@ -736,7 +756,7 @@ bool MDNSResponder::_processPTRAnswer(const MDNSResponder::stcMDNS_RRAnswerPTR* 
     bool    bResult = false;
     
     if ((bResult = (0 != p_pPTRAnswer))) {
-        DEBUG_EX_INFO(DEBUG_OUTPUT.printf(F("[MDNSResponder] _parseResponse: Processing PTR answers...\n")););
+        DEBUG_EX_INFO(DEBUG_OUTPUT.printf(F("[MDNSResponder] _processPTRAnswer: Processing PTR answers...\n")););
         // eg. _http._tcp.local PTR xxxx xx MyESP._http._tcp.local
         // Check pending service queries for '_http._tcp'
         
@@ -749,7 +769,7 @@ bool MDNSResponder::_processPTRAnswer(const MDNSResponder::stcMDNS_RRAnswerPTR* 
                     if (p_pPTRAnswer->m_u32TTL) {   // Received update message
                         pSQAnswer->m_TTLServiceDomain.set(p_pPTRAnswer->m_u32TTL, millis());    // Update TTL tag
                         DEBUG_EX_INFO(
-                                DEBUG_OUTPUT.printf(F("[MDNSResponder] p_pPTRAnswer: Updated TTL for "));
+                                DEBUG_OUTPUT.printf(F("[MDNSResponder] _processPTRAnswer: Updated TTL for "));
                                 _printRRDomain(pSQAnswer->m_ServiceDomain);
                                 DEBUG_OUTPUT.printf(F("\n"));
                         );
@@ -758,7 +778,7 @@ bool MDNSResponder::_processPTRAnswer(const MDNSResponder::stcMDNS_RRAnswerPTR* 
                         pSQAnswer->m_TTLServiceDomain.set(1, millis());             // See RFC 6762, 10.1
                         pSQAnswer->m_TTLServiceDomain.m_bUpdateScheduled = true;    // Avoid 'cache update' query
                         DEBUG_EX_INFO(
-                                DEBUG_OUTPUT.printf(F("[MDNSResponder] p_pPTRAnswer: 'Goodbye' received for "));
+                                DEBUG_OUTPUT.printf(F("[MDNSResponder] _processPTRAnswer: 'Goodbye' received for "));
                                 _printRRDomain(pSQAnswer->m_ServiceDomain);
                                 DEBUG_OUTPUT.printf(F("\n"));
                         );
@@ -1029,7 +1049,7 @@ bool MDNSResponder::_processTXTAnswer(const MDNSResponder::stcMDNS_RRAnswerTXT* 
  *   already been sent out three times, the probing has been successful and is finished.
  *
  * Conflict management is handled in '_parseResponse ff.'
- * Tiebraking is handle in 'parseQuery ff.'
+ * Tiebraking is handled in 'parseQuery ff.'
  */
 bool MDNSResponder::_updateProbeStatus(void) {
 
@@ -1039,6 +1059,7 @@ bool MDNSResponder::_updateProbeStatus(void) {
     // Probe host domain
     if ((ProbingStatus_ReadyToStart == m_HostProbeInformation.m_ProbingStatus) &&                   // Ready to get started AND
         (_getResponseMulticastInterface(SOFTAP_MODE | STATION_MODE) != IPAddress())) {              // Has IP address
+        DEBUG_EX_INFO(DEBUG_OUTPUT.printf(F("[MDNSResponder] _updateProbeStatus: Starting host probing...\n")););
 
         // First probe delay SHOULD be random 0-250 ms
         m_HostProbeInformation.m_ulNextProbeTimeout = (millis() + (rand() % MDNS_PROBE_DELAY));
@@ -1139,7 +1160,7 @@ bool MDNSResponder::_hasProbesWaitingForAnswers(void) const {
 
     for (stcMDNSService* pService=m_pServices; ((!bResult) && (pService)); pService=pService->m_pNext) {
         bResult = ((ProbingStatus_InProgress == pService->m_ProbeInformation.m_ProbingStatus) &&    // Probing
-                               (0 < pService->m_ProbeInformation.m_u8ProbesSent));                  // And really probing
+                   (0 < pService->m_ProbeInformation.m_u8ProbesSent));                              // And really probing
     }
     return bResult;
 }
@@ -1728,3 +1749,8 @@ uint8_t MDNSResponder::_replyMaskForService(const MDNSResponder::stcMDNS_RRHeade
     DEBUG_EX_INFO(DEBUG_OUTPUT.printf(F("[MDNSResponder] _replyMaskForService(%s.%s.%s): %u\n"), p_Service.m_pcName, p_Service.m_pcService, p_Service.m_pcProtocol, u8ReplyMask););
     return u8ReplyMask;
 }
+
+}   // namespace LEA_MDNSResponder
+
+
+

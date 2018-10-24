@@ -24,6 +24,10 @@
 
 #include "ESP8266mDNS Priv.h"
 
+/*
+ * LEA_MDNSResponder
+ */
+namespace LEA_MDNSResponder {
 
 /**
  * STRINGIZE
@@ -672,7 +676,7 @@ const char* MDNSResponder::answerHostname(const uint32_t p_u32AnswerIndex) {
 
         const stcMDNSServiceQuery*                              pServiceQuery = _findLegacyServiceQuery();
         const stcMDNSServiceQuery::stcAnswer*                   pSQAnswer = (pServiceQuery ? pServiceQuery->answerAtIndex(p_u32AnswerIndex) : 0);
-        const stcMDNSServiceQuery::stcAnswer::stcIP4Address*    pIP4Address = (pSQAnswer ? pSQAnswer->IP4AddressAtIndex(0) : 0);
+        const stcMDNSServiceQuery::stcAnswer::stcIP4Address*    pIP4Address = (((pSQAnswer) && (pSQAnswer->m_pIP4Addresses)) ? pSQAnswer->IP4AddressAtIndex(0) : 0);
         return (pIP4Address ? pIP4Address->m_IPAddress : IPAddress());
     }
 #endif
@@ -685,7 +689,7 @@ const char* MDNSResponder::answerHostname(const uint32_t p_u32AnswerIndex) {
 
         const stcMDNSServiceQuery*                              pServiceQuery = _findLegacyServiceQuery();
         const stcMDNSServiceQuery::stcAnswer*                   pSQAnswer = (pServiceQuery ? pServiceQuery->answerAtIndex(p_u32AnswerIndex) : 0);
-        const stcMDNSServiceQuery::stcAnswer::stcIP6Address*    pIP6Address = (pSQAnswer ? pSQAnswer->IP6AddressAtIndex(0) : 0);
+        const stcMDNSServiceQuery::stcAnswer::stcIP6Address*    pIP6Address = (((pSQAnswer) && (pSQAnswer->m_pIP6Addresses)) ? pSQAnswer->IP6AddressAtIndex(0) : 0);
         return (pIP6Address ? pIP6Address->m_IPAddress : IP6Address());
     }
 #endif
@@ -1067,7 +1071,7 @@ bool MDNSResponder::notifyAPChange(void) {
  */
 bool MDNSResponder::update(void) {
     
-    return _update();
+    return _process(true);
 }
 
 /*
@@ -1110,7 +1114,7 @@ MDNSResponder::hMDNSService MDNSResponder::enableArduino(uint16_t p_u16Port,
 MDNSResponder   MDNS;
 #endif
 
-
+}   // namespace LEA_MDNSResponder
 
 
 

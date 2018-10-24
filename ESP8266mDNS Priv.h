@@ -25,6 +25,11 @@
 #ifndef ESP8266MDNS_PRIV_H
 #define ESP8266MDNS_PRIV_H
 
+/*
+ * namespace LEA_MDNSResponder
+ */
+namespace LEA_MDNSResponder {
+
 // Enable class debug functions
 #define ESP_8266_MDNS_INCLUDE
 #define DEBUG_ESP_MDNS_RESPONDER
@@ -143,6 +148,8 @@
     #endif
     #define F(A)    A
 #endif
+
+}   // namespace LEA_MDNSResponder
 
 
 // Include the main header, so the submodlues only need to include this header

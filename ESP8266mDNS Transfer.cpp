@@ -33,6 +33,11 @@ extern "C" {
 #include "ESP8266mDNS Priv.h"
 
 
+/*
+ * namespace LEA_MDNSResponder
+ */
+namespace LEA_MDNSResponder {
+
 /**
  *  CONST STRINGS
  */
@@ -1621,7 +1626,7 @@ bool MDNSResponder::_writeMDNSAnswer_SRV(MDNSResponder::stcMDNSService& p_rServi
     return bResult;
 }
 
-
+}   // namespace LEA_MDNSResponder
 
 
 

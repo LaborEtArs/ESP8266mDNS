@@ -28,6 +28,7 @@
 
 #include <ESP8266WiFi.h>
 #include "../ESP8266mDNS.h"
+using namespace LEA_MDNSResponder;
 #include <WiFiClient.h>
 
 const char*                         ssid					= "............";

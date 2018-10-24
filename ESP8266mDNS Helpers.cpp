@@ -27,6 +27,10 @@
 
 #include "ESP8266mDNS Priv.h"
 
+/*
+ * namespace LEA_MDNSResponder
+ */
+namespace LEA_MDNSResponder {
 
 /**
  * HELPERS
@@ -62,7 +66,7 @@ static const char* strrstr(const char*__restrict p_pcString, const char*__restri
 }
 
 /*
- * MDNSResponder::updateDomain (static)
+ * MDNSResponder::indexDomain (static)
  *
  * Updates the given domain 'p_rpcHostname' by appending a delimiter and an index number.
  *
@@ -73,9 +77,9 @@ static const char* strrstr(const char*__restrict p_pcString, const char*__restri
  * if no default is given, 'esp8266' is used.
  *
  */
-/*static*/ bool MDNSResponder::updateDomain(char*& p_rpcDomain,
-                                            const char* p_pcDivider /*= "-"*/,
-                                            const char* p_pcDefaultDomain /*= 0*/) {
+/*static*/ bool MDNSResponder::indexDomain(char*& p_rpcDomain,
+                                           const char* p_pcDivider /*= "-"*/,
+                                           const char* p_pcDefaultDomain /*= 0*/) {
 
     bool	bResult = false;
 
@@ -106,7 +110,7 @@ static const char* strrstr(const char*__restrict p_pcString, const char*__restri
                     bResult = true;
                 }
                 else {
-                    DEBUG_EX_ERR(DEBUG_OUTPUT.println(F("[MDNSResponder] updateDomain: FAILED to alloc new hostname!")););
+                    DEBUG_EX_ERR(DEBUG_OUTPUT.println(F("[MDNSResponder] indexDomain: FAILED to alloc new hostname!")););
                 }
             }
             else {
@@ -126,7 +130,7 @@ static const char* strrstr(const char*__restrict p_pcString, const char*__restri
                 bResult = true;
             }
             else {
-                DEBUG_EX_ERR(DEBUG_OUTPUT.println(F("[MDNSResponder] updateDomain: FAILED to alloc new hostname!")););
+                DEBUG_EX_ERR(DEBUG_OUTPUT.println(F("[MDNSResponder] indexDomain: FAILED to alloc new hostname!")););
             }
         }
     }
@@ -141,10 +145,10 @@ static const char* strrstr(const char*__restrict p_pcString, const char*__restri
             bResult = true;
         }
         else {
-            DEBUG_EX_ERR(DEBUG_OUTPUT.println(F("[MDNSResponder] updateDomain: FAILED to alloc new hostname!")););
+            DEBUG_EX_ERR(DEBUG_OUTPUT.println(F("[MDNSResponder] indexDomain: FAILED to alloc new hostname!")););
         }
     }
-    DEBUG_EX_INFO(DEBUG_OUTPUT.printf(F("[MDNSResponder] updateDomain: %s\n"), p_rpcHostname););
+    DEBUG_EX_INFO(DEBUG_OUTPUT.printf(F("[MDNSResponder] indexDomain: %s\n"), p_rpcDomain););
     return bResult;
 }
 
@@ -152,6 +156,11 @@ static const char* strrstr(const char*__restrict p_pcString, const char*__restri
 /*
  * UDP CONTEXT
  */
+
+bool MDNSResponder::_callProcess(void) {
+
+	return _process(false);
+}
 
 /*
  * MDNSResponder::_allocUDPContext
@@ -184,7 +193,7 @@ bool MDNSResponder::_allocUDPContext(void) {
 
         if (m_pUDPContext->listen(*IP_ADDR_ANY, DNS_MQUERY_PORT)) {
             m_pUDPContext->setMulticastTTL(MDNS_MULTICAST_TTL);
-            m_pUDPContext->onRx(std::bind(&MDNSResponder::_update, this));
+            m_pUDPContext->onRx(std::bind(&MDNSResponder::_callProcess, this));
             
             bResult = m_pUDPContext->connect(multicast_addr, DNS_MQUERY_PORT);
         }
@@ -713,7 +722,7 @@ bool MDNSResponder::_releaseTempServiceTxts(MDNSResponder::stcMDNSService& p_rSe
     }
 #endif
 
-
+}   // namespace LEA_MDNSResponder
 
 
 

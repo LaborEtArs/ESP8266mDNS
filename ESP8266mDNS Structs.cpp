@@ -25,6 +25,11 @@
 #include "ESP8266mDNS Priv.h"
 
 
+/*
+ * namespace LEA_MDNSResponder
+ */
+namespace LEA_MDNSResponder {
+
 /**
  * STRUCTS
  */
@@ -1644,21 +1649,23 @@ uint32_t MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP4AddressCount(void) 
 }
 
 /*
- * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP4AddressAtIndex (const)
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP4AddressAtIndex
  */
-const MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP4Address* MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP4AddressAtIndex(uint32_t p_u32Index) const {
+MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP4Address* MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP4AddressAtIndex(uint32_t p_u32Index) {
 
     return (stcIP4Address*)(((const _stcAnswer*)this)->IP4AddressAtIndex(p_u32Index));
 }
 
 /*
- * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP4AddressAtIndex
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP4AddressAtIndex (const)
  */
-MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP4Address* MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP4AddressAtIndex(uint32_t p_u32Index) {
+const MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP4Address* MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::IP4AddressAtIndex(uint32_t p_u32Index) const {
     
-    stcIP4Address*    pIP4Address = 0;
+    const stcIP4Address*    pIP4Address = 0;
     
-    if ((uint32_t)(-1) != p_u32Index) {
+    if (((uint32_t)(-1) != p_u32Index) &&
+        (m_pIP4Addresses)) {
+
         uint32_t    u32Index;
         for (pIP4Address=m_pIP4Addresses, u32Index=0; ((pIP4Address) && (u32Index<p_u32Index)); pIP4Address=pIP4Address->m_pNext, ++u32Index);
     }
@@ -1723,19 +1730,19 @@ bool MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::removeIP6Address(MDNSRespo
 }
 
 /*
- * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::findIP6Address (const)
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::findIP6Address
  */
-const MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP6Address* MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::findIP6Address(const IP6Address& p_IPAddress) const {
+MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP6Address* MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::findIP6Address(const IP6Address& p_IPAddress) {
 
     return (stcIP6Address*)(((const _stcAnswer*)this)->findIP6Address(p_IPAddress));
 }
 
 /*
- * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::findIP6Address
+ * MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::findIP6Address (const)
  */
-MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP6Address* MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::findIP6Address(const IPAddress& p_IPAddress) {
+const MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP6Address* MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::findIP6Address(const IPAddress& p_IPAddress) const {
     
-    stcIP6Address*  pIP6Address = m_pIP6Addresses;
+    const stcIP6Address*    pIP6Address = m_pIP6Addresses;
     while (pIP6Address) {
         if (p_IP6Address->m_IPAddress == p_IPAddress) {
             break;
@@ -1775,7 +1782,9 @@ MDNSResponder::_stcMDNSServiceQuery::_stcAnswer::_stcIP6Address* MDNSResponder::
     
     stcIP6Address*    pIP6Address = 0;
     
-    if ((uint32_t)(-1) != p_u32Index) {
+    if (((uint32_t)(-1) != p_u32Index) &&
+        (m_pIP6Addresses)) {
+
         uint32_t    u32Index;
         for (pIP6Address=m_pIP6Addresses, u32Index=0; ((pIP6Address) && (u32Index<p_u32Index)); pIP6Address=pIP6Address->m_pNext, ++u32Index);
     }
@@ -1862,7 +1871,9 @@ const MDNSResponder::_stcMDNSServiceQuery::_stcAnswer* MDNSResponder::_stcMDNSSe
     
     const stcAnswer*    pAnswer = 0;
     
-    if ((uint32_t)(-1) != p_u32Index) {
+    if (((uint32_t)(-1) != p_u32Index) &&
+        (m_pAnswers)) {
+
         uint32_t    u32Index;
         for (pAnswer=m_pAnswers, u32Index=0; ((pAnswer) && (u32Index<p_u32Index)); pAnswer=pAnswer->m_pNext, ++u32Index);
     }
@@ -2093,7 +2104,7 @@ uint16_t MDNSResponder::_stcMDNSSendParameter::findCachedDomainOffset(const void
     return (pCacheItem ? pCacheItem->m_u16Offset : 0);
 }
 
-
+}   // namespace LEA_MDNSResponder
 
 
 

@@ -109,6 +109,10 @@
 
 #include "ESP8266WiFi.h"
 
+/**
+ * LEA_MDNSResponder
+ */
+namespace LEA_MDNSResponder {
 
 //this should be defined at build time
 #ifndef ARDUINO_BOARD
@@ -433,9 +437,9 @@ public:
                                bool p_bAuthUpload = false);
     
     // Domain name helper
-    static bool updateDomain(char*& p_rpcDomain,
-                             const char* p_pcDivider = "-",
-                             const char* p_pcDefaultDomain = 0);
+    static bool indexDomain(char*& p_rpcDomain,
+                            const char* p_pcDivider = "-",
+                            const char* p_pcDefaultDomain = 0);
     
 protected:
     /** STRUCTS **/
@@ -645,7 +649,7 @@ protected:
      */
     typedef struct _stcMDNS_RRAnswer {
         _stcMDNS_RRAnswer*  m_pNext;
-        enuAnswerType       m_AnswerType;
+        const enuAnswerType m_AnswerType;
         _stcMDNS_RRHeader   m_Header;
         bool                m_bCacheFlush;  // Cache flush command bit
         uint32_t            m_u32TTL;       // Validity time in seconds
@@ -998,7 +1002,7 @@ protected:
 
     /** CONTROL **/
     /* MAINTENANCE */
-    bool _update(void);
+    bool _process(bool p_bUserContext);
     bool _restart(void);
     
     /* RECEIVING */
@@ -1170,6 +1174,7 @@ protected:
 
     /** HELPERS **/
     /* UDP CONTEXT */
+    bool _callProcess(void);
     bool _allocUDPContext(void);
     bool _releaseUDPContext(void);
 
@@ -1240,6 +1245,8 @@ protected:
 #if !defined(NO_GLOBAL_INSTANCES) && !defined(NO_GLOBAL_MDNS)
     extern MDNSResponder MDNS;
 #endif
+
+}   // namespace LEA_MDNSResponder
 
 #endif //ESP8266MDNS_H
 
