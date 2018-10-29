@@ -153,7 +153,7 @@ namespace LEA_MDNSResponder {
 
 
 // Include the main header, so the submodlues only need to include this header
-#include "ESP8266mDNS.h"
+#include "ESP8266mDNSv2.h"
 
 
 #endif  // ESP8266MDNS_PRIV_H

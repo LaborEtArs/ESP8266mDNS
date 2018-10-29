@@ -29,7 +29,7 @@
 #include <WString.h>
 #include <cstdint>
 
-#include "ESP8266mDNS.h"
+#include "ESP8266mDNSv2.h"
 
 /*
  * ESP8266mDNS Control.cpp
@@ -41,7 +41,7 @@ extern "C" {
 
 #include "lwip/prot/dns.h"  // DNS_RRTYPE_xxx, DNS_MQUERY_PORT
 
-#include "ESP8266mDNS Priv.h"
+#include "ESP8266mDNS-Priv.h"
 
 
 /*

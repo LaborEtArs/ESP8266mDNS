@@ -27,7 +27,7 @@
 
 
 #include <ESP8266WiFi.h>
-#include "../ESP8266mDNS.h"
+#include <ESP8266mDNSv2.h>
 using namespace LEA_MDNSResponder;
 #include <WiFiClient.h>
 
