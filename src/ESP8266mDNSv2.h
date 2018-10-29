@@ -105,6 +105,7 @@
 #include <functional>   // for UdpContext.h
 #include "WiFiUdp.h"
 #include "lwip/udp.h"
+#include "debug.h" // DEBUGV definition
 #include "include/UdpContext.h"
 
 #include "ESP8266WiFi.h"

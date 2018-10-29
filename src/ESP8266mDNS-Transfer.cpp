@@ -28,9 +28,9 @@ extern "C" {
 
 #include "lwip/prot/dns.h"  // DNS_RRTYPE_xxx, DNS_MQUERY_PORT
 
-#include "../LEADump/LEADump.h"
+//#include "../LEADump/LEADump.h"
 
-#include "ESP8266mDNS Priv.h"
+#include "ESP8266mDNS-Priv.h"
 
 
 /*

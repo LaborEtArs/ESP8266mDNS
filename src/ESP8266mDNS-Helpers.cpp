@@ -25,7 +25,7 @@
 #include "lwip/igmp.h"
 #include "lwip/prot/dns.h"  // DNS_RRTYPE_xxx, DNS_MQUERY_PORT
 
-#include "ESP8266mDNS Priv.h"
+#include "ESP8266mDNS-Priv.h"
 
 /*
  * namespace LEA_MDNSResponder

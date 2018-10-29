@@ -22,7 +22,7 @@
  *
  */
 
-#include "ESP8266mDNS Priv.h"
+#include "ESP8266mDNS-Priv.h"
 
 /*
  * LEA_MDNSResponder
